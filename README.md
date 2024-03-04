@@ -36,9 +36,24 @@ If no -f or -d options are specified, we will apply:
 -d FAN_CREATE,FAN_DELETE,FAN_MOVED_FROM,FAN_MOVED_TO
 ```
 
-... which should give events pretty much whenever anything is changed.
+... which should give events pretty much whenever anything is changed. Output looks something like this:
+
+```
+FAN_CREATE /home/user/fanotify-helper/.git/refs/heads/main.lock
+FAN_CLOSE_WRITE /home/user/fanotify-helper/.git/refs/heads/main.lock
+FAN_CLOSE_WRITE /home/user/fanotify-helper/.git/logs/HEAD
+FAN_CLOSE_WRITE /home/user/fanotify-helper/.git/logs/refs/heads/main
+FAN_MOVED_FROM /home/user/fanotify-helper/.git/refs/heads/main.lock
+FAN_MOVED_TO /home/user/fanotify-helper/.git/refs/heads/main
+FAN_DELETE /home/user/fanotify-helper/.git/HEAD.lock
+FAN_CREATE /home/user/fanotify-helper/.git/objects/maintenance.lock
+FAN_CLOSE_WRITE /home/user/fanotify-helper/.git/objects/maintenance.lock
+FAN_DELETE /home/user/fanotify-helper/.git/objects/maintenance.lock
+```
 
 ### Types of events
+
+If you are specifying arguments to `-d` or `-f`, or parsing the output of the tool, these are the event types you'll see:
 
 * FAN_CREATE - File or directory created
 * FAN_MOVED_TO - File or directory moved away
