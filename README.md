@@ -51,6 +51,13 @@ FAN_CLOSE_WRITE /home/user/fanotify-helper/.git/objects/maintenance.lock
 FAN_DELETE /home/user/fanotify-helper/.git/objects/maintenance.lock
 ```
 
+Events applying to directories will have `|FAN_ONDIR` suffixed to them:
+
+```
+FAN_MOVED_FROM|FAN_ONDIR /home/moise/grits/fanotify-helper
+FAN_MOVED_TO|FAN_ONDIR /home/moise/fanotify-helper-2
+```
+
 ### Types of events
 
 If you are specifying arguments to `-d` or `-f`, or parsing the output of the tool, these are the event types you'll see:
@@ -65,6 +72,12 @@ If you are specifying arguments to `-d` or `-f`, or parsing the output of the to
 * FAN_MOVED_FROM - File moved into this location
 * FAN_DELETE - File deleted
 * ESTALE
+
+Events corresponding to directories will have FAN_ONDIR appended to them, e.g.:
+
+```
+
+```
 
 Note that you will receive FAN_MOVED_TO and FAN_MOVED_FROM events for files which have moved into or out of your watched tree, without any corresponding create or delete event. You must opt to monitor move events in addition to create/delete events if you want to be aware of both.
  
