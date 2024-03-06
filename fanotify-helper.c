@@ -186,8 +186,9 @@ int main(int argc, char *argv[]) {
     }
 
     if (file_events_mask != 0) {
-        ret = fanotify_mark(fd, FAN_MARK_ADD | FAN_MARK_FILESYSTEM, file_events_mask | FAN_EVENT_ON_CHILD,
-                            AT_FDCWD, argv[1]);
+        ret = fanotify_mark(fd, FAN_MARK_ADD | FAN_MARK_FILESYSTEM,
+			    file_events_mask | FAN_EVENT_ON_CHILD,
+                            AT_FDCWD, argv[optind]);
         if (ret == -1) {
             perror("fanotify_mark");
             exit(EXIT_FAILURE);
@@ -195,8 +196,9 @@ int main(int argc, char *argv[]) {
     }
 
     if (dir_events_mask != 0) {
-        ret = fanotify_mark(fd, FAN_MARK_ADD | FAN_MARK_FILESYSTEM, dir_events_mask | FAN_ONDIR,
-                            AT_FDCWD, argv[1]);
+        ret = fanotify_mark(fd, FAN_MARK_ADD | FAN_MARK_FILESYSTEM,
+			    dir_events_mask | FAN_ONDIR,
+                            AT_FDCWD, argv[optind]);
         if (ret == -1) {
             perror("fanotify_mark");
             exit(EXIT_FAILURE);
