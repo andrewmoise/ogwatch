@@ -203,8 +203,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    printf("Listening for events.\n");
-
     uid_t real_uid = getuid();
     uid_t effective_uid = geteuid();
 
