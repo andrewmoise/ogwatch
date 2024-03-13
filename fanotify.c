@@ -17,19 +17,19 @@ Licensed under GNU Affero General Public License, Version 3
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/fanotify.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/fanotify.h>
 #include <sys/time.h>
 #include <unistd.h>
+
+#include "owatch.h"
 
 #define BUF_SIZE 256
 #define ESTALE_DEBOUNCE_DELAY 50
 
-static struct event_map {
-    char *name;
-    unsigned int value;
-} events[] = {
+// Define the full list of fanotify events
+static EventMap fanotify_events[] = {
     {"FAN_CREATE", FAN_CREATE},
     {"FAN_MOVED_TO", FAN_MOVED_TO},
     {"FAN_OPEN", FAN_OPEN},
@@ -42,29 +42,25 @@ static struct event_map {
     {NULL, 0}
 };
 
-// Initialize with default events if no specific events are provided
-unsigned int default_file_events_mask = FAN_CREATE | FAN_DELETE | FAN_MOVED_FROM | FAN_MOVED_TO | FAN_CLOSE_WRITE;
-unsigned int default_dir_events_mask = FAN_CREATE | FAN_DELETE | FAN_MOVED_FROM | FAN_MOVED_TO;
+// Implementations
+EventMap *get_full_events_list() {
+    return fanotify_events;
+}
 
-// Alternate version defaults for generic mode
-unsigned int generic_file_events_mask = FAN_DELETE | FAN_MOVED_FROM | FAN_MOVED_TO | FAN_CLOSE_WRITE;
-unsigned int generic_dir_events_mask = FAN_CREATE | FAN_DELETE | FAN_MOVED_FROM | FAN_MOVED_TO;
+unsigned int get_default_file_events_mask() {
+    return FAN_CREATE | FAN_DELETE | FAN_MOVED_FROM | FAN_MOVED_TO | FAN_CLOSE_WRITE;
+}
 
-// Parses the event names from the command line arguments and returns the corresponding fanotify mask.
-unsigned int parse_events(char *events_str) {
-    unsigned int mask = 0;
-    char *event_name = strtok(events_str, ",");
-    while (event_name != NULL) {
-        for (int i = 0; events[i].name != NULL; i++) {
-            if (strcmp(events[i].name, event_name) == 0) {
-                mask |= events[i].value;
-                break;
-            }
-        }
-        event_name = strtok(NULL, ",");
-    }
+unsigned int get_default_dir_events_mask() {
+    return FAN_CREATE | FAN_DELETE | FAN_MOVED_FROM | FAN_MOVED_TO;
+}
 
-    return mask;
+unsigned int get_generic_file_events_mask() {
+    return FAN_DELETE | FAN_MOVED_FROM | FAN_MOVED_TO | FAN_CLOSE_WRITE;
+}
+
+unsigned int get_generic_dir_events_mask() {
+    return FAN_CREATE | FAN_DELETE | FAN_MOVED_FROM | FAN_MOVED_TO;
 }
 
 int access_is_ok(uid_t real_uid, uid_t effective_uid, const char *path) {
@@ -129,33 +125,7 @@ int should_print_estale(int fd, struct timeval *estale_timestamp) {
     }
 }
 
-// Help message function
-void print_help() {
-    printf("Usage: fanotify_watch [options] <directory>\n");
-    printf("Options:\n");
-    printf("  -f <file_events>   Comma-separated list of events for files\n");
-    printf("  -d <dir_events>    Comma-separated list of events for directories\n");
-    printf("  -0                 Use null character as terminator\n");
-    printf("  -g                 Enable generic output mode\n");
-    printf("  -h                 Display help and exit\n");
-    printf("Events:\n");
-    for (int i = 0; events[i].name != NULL; i++) {
-        printf("  %s\n", events[i].name);
-    }
-    printf("\n");
-    printf("Default events to monitor / typical use: fanotify_watch \\\n");
-    printf("  -d FAN_CREATE,FAN_DELETE,FAN_MOVED_FROM,FAN_MOVED_TO \\\n");
-    printf("  -f FAN_CREATE,FAN_DELETE,FAN_MOVED_FROM,FAN_MOVED_TO,FAN_CLOSE_WRITE\\\n");
-    printf("  /path/to/watch\n");
-    printf("\n");
-    printf("Use FAN_CLOSE_WRITE to debounce multiple writes, and just get a single\n");
-    printf("  notification when a modified file is being closed.\n");
-    printf("\n");
-    printf("Output will come with one event per line, with |FAN_ONDIR for directory\n");
-    printf("  events, or without for file events.\n");
-}
-
-int main(int argc, char *argv[]) {
+void event_watch_loop(const char *watch_path, unsigned int file_events_mask, unsigned int dir_events_mask, int generic_mode, char terminator) {
     int fd, ret, event_fd, mount_fd;
     ssize_t len, path_len;
     char path[PATH_MAX];
@@ -166,50 +136,6 @@ int main(int argc, char *argv[]) {
     struct fanotify_event_info_fid *fid;
     const char *file_name;
     struct stat sb;
-    const char *watch_path;
-    unsigned int file_events_mask = 0, dir_events_mask = 0;
-    int generic_mode = 0;
-    int opt;
-    char terminator = '\n';
-
-    while ((opt = getopt(argc, argv, "f:d:0gh")) != -1) {
-        switch (opt) {
-            case 'f':
-                file_events_mask = parse_events(optarg);
-                break;
-            case 'd':
-                dir_events_mask = (parse_events(optarg) | FAN_ONDIR);
-                break;
-            case 'g':
-                generic_mode = 1;
-                break;
-            case '0':
-                terminator = '\0';
-                break;
-            case 'h':
-                print_help();
-                exit(EXIT_SUCCESS);
-            default:
-                print_help();
-                exit(EXIT_FAILURE);
-        }
-    }
-    if (optind >= argc) {
-        fprintf(stderr, "Missing path argument. Use -h for help.\n");
-        exit(EXIT_FAILURE);
-    }
-
-    if (!file_events_mask && !dir_events_mask) {
-        if (!generic_mode) {
-            file_events_mask = default_file_events_mask;
-            dir_events_mask = default_dir_events_mask;
-        } else {
-            file_events_mask = generic_file_events_mask;
-            dir_events_mask = generic_dir_events_mask;
-        }
-    }
-
-    watch_path = argv[optind];
 
     mount_fd = open(watch_path, O_DIRECTORY | O_RDONLY);
     if (mount_fd == -1) {
@@ -230,7 +156,7 @@ int main(int argc, char *argv[]) {
     if (file_events_mask != 0) {
         ret = fanotify_mark(fd, FAN_MARK_ADD | FAN_MARK_FILESYSTEM,
 			    file_events_mask | FAN_EVENT_ON_CHILD,
-                            AT_FDCWD, argv[optind]);
+                            AT_FDCWD, watch_path);
         if (ret == -1) {
             perror("fanotify_mark");
             exit(EXIT_FAILURE);
@@ -240,7 +166,7 @@ int main(int argc, char *argv[]) {
     if (dir_events_mask != 0) {
         ret = fanotify_mark(fd, FAN_MARK_ADD | FAN_MARK_FILESYSTEM,
 			    dir_events_mask | FAN_ONDIR,
-                            AT_FDCWD, argv[optind]);
+                            AT_FDCWD, watch_path);
         if (ret == -1) {
             perror("fanotify_mark");
             exit(EXIT_FAILURE);
@@ -260,8 +186,6 @@ int main(int argc, char *argv[]) {
             if (should_print_estale(fd, &estale_timestamp)) {
                 if (!generic_mode)
                     printf("ESTALE\n");
-                else
-                    printf("%s%c", watch_path, terminator);
                 estale_pending = 0;
             }
         }
@@ -360,9 +284,9 @@ int main(int argc, char *argv[]) {
 
             if (!generic_mode) {
                 const char *dir_or_file = (metadata->mask & FAN_ONDIR) ? "|FAN_ONDIR" : "";
-                for (int i = 0; events[i].name != NULL; i++) {
-                    if (metadata->mask & events[i].value) {
-                        printf("%s%s %s/%s%c", events[i].name, dir_or_file, path, file_name, terminator);
+                for (int i = 0; fanotify_events[i].name != NULL; i++) {
+                    if (metadata->mask & fanotify_events[i].value) {
+                        printf("%s%s %s/%s%c", fanotify_events[i].name, dir_or_file, path, file_name, terminator);
                         fflush(stdout); // Ensure immediate output
                     }
                 }
@@ -372,7 +296,4 @@ int main(int argc, char *argv[]) {
             }
         }
     }
-
-    // Can't happen that we get here, we always exit from signal
-    exit(EXIT_SUCCESS);
 }
