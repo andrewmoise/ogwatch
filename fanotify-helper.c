@@ -20,9 +20,11 @@ Licensed under GNU Affero General Public License, Version 3
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/fanotify.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #define BUF_SIZE 256
+#define ESTALE_DEBOUNCE_DELAY 50
 
 static struct event_map {
     char *name;
@@ -44,6 +46,10 @@ static struct event_map {
 unsigned int default_file_events_mask = FAN_CREATE | FAN_DELETE | FAN_MOVED_FROM | FAN_MOVED_TO | FAN_CLOSE_WRITE;
 unsigned int default_dir_events_mask = FAN_CREATE | FAN_DELETE | FAN_MOVED_FROM | FAN_MOVED_TO;
 
+// Alternate version defaults for generic mode
+unsigned int generic_file_events_mask = FAN_DELETE | FAN_MOVED_FROM | FAN_MOVED_TO | FAN_CLOSE_WRITE;
+unsigned int generic_dir_events_mask = FAN_CREATE | FAN_DELETE | FAN_MOVED_FROM | FAN_MOVED_TO;
+
 // Parses the event names from the command line arguments and returns the corresponding fanotify mask.
 unsigned int parse_events(char *events_str) {
     unsigned int mask = 0;
@@ -60,7 +66,6 @@ unsigned int parse_events(char *events_str) {
 
     return mask;
 }
-
 
 int access_is_ok(uid_t real_uid, uid_t effective_uid, const char *path) {
     struct stat statbuf;
@@ -94,16 +99,45 @@ int access_is_ok(uid_t real_uid, uid_t effective_uid, const char *path) {
     return result;
 }
 
+// Debouncing for ESTALE messages
+int should_print_estale(int fd, struct timeval *estale_timestamp) {
+    fd_set fds;
+    FD_ZERO(&fds);
+    FD_SET(fd, &fds);
+
+    struct timeval now, timeout;
+    gettimeofday(&now, NULL);
+
+    long elapsed = (now.tv_sec - estale_timestamp->tv_sec) * 1000 + (now.tv_usec - estale_timestamp->tv_usec) / 1000;
+    long remaining = ESTALE_DEBOUNCE_DELAY - elapsed;
+
+    if (remaining > 0) {
+        timeout.tv_sec = remaining / 1000;
+        timeout.tv_usec = (remaining % 1000) * 1000;
+    } else {
+        timeout.tv_sec = 0;
+        timeout.tv_usec = 0;
+    }
+
+    /* Note - by design this will also not print ESTALE while there are messages waiting to read */
+    int res = select(fd + 1, &fds, NULL, NULL, &timeout);
+    if (res <= 0) {
+        *estale_timestamp = now;
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
 // Help message function
 void print_help() {
     printf("Usage: fanotify_watch [options] <directory>\n");
-    printf("\n");
     printf("Options:\n");
-    printf("  -f <file_events>   Comma-separated list of events to monitor for files\n");
-    printf("  -d <dir_events>    Comma-separated list of events to monitor for directories\n");
-    printf("  -0                 Use null character as the terminator instead of newline\n");
-    printf("  -h                 Display this help and exit\n");
-    printf("\n");
+    printf("  -f <file_events>   Comma-separated list of events for files\n");
+    printf("  -d <dir_events>    Comma-separated list of events for directories\n");
+    printf("  -0                 Use null character as terminator\n");
+    printf("  -g                 Enable generic output mode\n");
+    printf("  -h                 Display help and exit\n");
     printf("Events:\n");
     for (int i = 0; events[i].name != NULL; i++) {
         printf("  %s\n", events[i].name);
@@ -134,10 +168,11 @@ int main(int argc, char *argv[]) {
     struct stat sb;
     const char *watch_path;
     unsigned int file_events_mask = 0, dir_events_mask = 0;
+    int generic_mode = 0;
     int opt;
-    int null_terminate = 0; // Flag for null-terminated output
+    char terminator = '\n';
 
-    while ((opt = getopt(argc, argv, "f:d:0h")) != -1) {
+    while ((opt = getopt(argc, argv, "f:d:0gh")) != -1) {
         switch (opt) {
             case 'f':
                 file_events_mask = parse_events(optarg);
@@ -145,8 +180,11 @@ int main(int argc, char *argv[]) {
             case 'd':
                 dir_events_mask = (parse_events(optarg) | FAN_ONDIR);
                 break;
+            case 'g':
+                generic_mode = 1;
+                break;
             case '0':
-                null_terminate = 1; // Enable null-terminated output
+                terminator = '\0';
                 break;
             case 'h':
                 print_help();
@@ -156,15 +194,19 @@ int main(int argc, char *argv[]) {
                 exit(EXIT_FAILURE);
         }
     }
-
     if (optind >= argc) {
         fprintf(stderr, "Missing path argument. Use -h for help.\n");
         exit(EXIT_FAILURE);
     }
 
-    if (file_events_mask == 0 && dir_events_mask == 0) {
-        file_events_mask = default_file_events_mask;
-        dir_events_mask = default_dir_events_mask;
+    if (!file_events_mask && !dir_events_mask) {
+        if (!generic_mode) {
+            file_events_mask = default_file_events_mask;
+            dir_events_mask = default_dir_events_mask;
+        } else {
+            file_events_mask = generic_file_events_mask;
+            dir_events_mask = generic_dir_events_mask;
+        }
     }
 
     watch_path = argv[optind];
@@ -208,9 +250,23 @@ int main(int argc, char *argv[]) {
     uid_t real_uid = getuid();
     uid_t effective_uid = geteuid();
 
-    while(1) {
-        /* Read events from the event queue into a buffer. */
+    struct timeval estale_timestamp;
+    gettimeofday(&estale_timestamp, NULL);
+    int estale_pending = 0;
 
+    while(1) {
+        /* Print an ESTALE if we have one, subject to debouncing */
+        if (estale_pending) {
+            if (should_print_estale(fd, &estale_timestamp)) {
+                if (!generic_mode)
+                    printf("ESTALE\n");
+                else
+                    printf("%s%c", watch_path, terminator);
+                estale_pending = 0;
+            }
+        }
+
+        /* Read events from the event queue into a buffer. */
         len = read(fd, events_buf, sizeof(events_buf));
         if (len == -1 && errno != EAGAIN) {
             perror("read");
@@ -253,7 +309,7 @@ int main(int argc, char *argv[]) {
             event_fd = open_by_handle_at(mount_fd, file_handle, O_RDONLY);
             if (event_fd == -1) {
                 if (errno == ESTALE) {
-                    printf("ESTALE\n");
+                    estale_pending = 1;
                     continue;
                 } else {
                     perror("open_by_handle_at");
@@ -302,14 +358,17 @@ int main(int argc, char *argv[]) {
 
             /* We passed the checks, print events */
 
-            const char *dir_or_file = (metadata->mask & FAN_ONDIR) ? "|FAN_ONDIR" : "";
-            char terminator = (null_terminate ? '\0' : '\n');
-
-            for (int i = 0; events[i].name != NULL; i++) {
-                if (metadata->mask & events[i].value) {
-                    printf("%s%s %s/%s%c", events[i].name, dir_or_file, path, file_name, terminator);
-                    fflush(stdout); // Ensure immediate output
+            if (!generic_mode) {
+                const char *dir_or_file = (metadata->mask & FAN_ONDIR) ? "|FAN_ONDIR" : "";
+                for (int i = 0; events[i].name != NULL; i++) {
+                    if (metadata->mask & events[i].value) {
+                        printf("%s%s %s/%s%c", events[i].name, dir_or_file, path, file_name, terminator);
+                        fflush(stdout); // Ensure immediate output
+                    }
                 }
+            } else {
+                printf("%s/%s%c", path, file_name, terminator);
+                fflush(stdout); // Ensure immediate output
             }
         }
     }
