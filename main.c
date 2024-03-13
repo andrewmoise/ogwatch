@@ -2,8 +2,6 @@
 
 Copyright (C) 2024, Andrew Moise <andrew.moise@gmail.com>
 
-(Derived from Linux man pages fanotify(7) man page example)
-
 Licensed under GNU Affero General Public License, Version 3
 
 */
