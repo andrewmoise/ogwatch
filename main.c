@@ -18,7 +18,7 @@ Licensed under GNU Affero General Public License, Version 3
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "owatch.h"
+#include "ogwatch.h"
 
 // Parses the event names from the command line arguments and returns the corresponding fanotify mask.
 unsigned int parse_events(char *events_str) {

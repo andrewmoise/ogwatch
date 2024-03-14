@@ -14,7 +14,7 @@ Licensed under GNU Affero General Public License, Version 3
 #include <string.h>
 #include <sys/time.h>
 
-#include "owatch.h"
+#include "ogwatch.h"
 
 static EventMap fsevents_events[] = {
     {"None", kFSEventStreamEventFlagNone},

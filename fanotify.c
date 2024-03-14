@@ -23,7 +23,7 @@ Licensed under GNU Affero General Public License, Version 3
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "owatch.h"
+#include "ogwatch.h"
 
 #define BUF_SIZE 256
 #define ESTALE_DEBOUNCE_DELAY 50
