@@ -102,7 +102,6 @@ Note that the FSEvents backend debounces duplicate events, with a slight delay (
 * UserDropped: The event was dropped due to a buffer overflow in the user space.
 * KernelDropped: The event was dropped due to a buffer overflow in the kernel.
 * EventIdsWrapped: Event IDs have wrapped around.
-
 * RootChanged: The root of the monitored directory has changed.
 * Mount: A filesystem was mounted under the watched directory.
 * Unmount: A filesystem was unmounted under the watched directory.
@@ -114,7 +113,6 @@ Note that the FSEvents backend debounces duplicate events, with a slight delay (
 * ItemFinderInfoMod: Finder metadata for a file or directory was modified.
 * ItemChangeOwner: The owner of a file or directory was changed.
 * ItemXattrMod: Extended attributes of a file or directory were modified.
-
 * ItemIsFile: The event pertains to a file.
 * ItemIsDir: The event pertains to a directory.
 * ItemIsSymlink: The event pertains to a symbolic link.
