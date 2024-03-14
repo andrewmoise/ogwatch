@@ -68,6 +68,7 @@ typedef struct {
     int generic_mode;
     unsigned int file_events_mask;
     unsigned int dir_events_mask;
+    char terminator;
 } EventWatcherContext;
 
 void eventCallback(ConstFSEventStreamRef streamRef,
@@ -123,7 +124,7 @@ void eventCallback(ConstFSEventStreamRef streamRef,
 
                 if (eventFlags[i] & fsevents_events[j].value) {
                     // Check if it's a directory or symlink for printing, based on your logic
-                    printf("%s%s %s\n", fsevents_events[j].name, dir_or_file, paths[i]);
+                    printf("%s%s %s%c", fsevents_events[j].name, dir_or_file, paths[i], contextData->terminator);
                     fflush(stdout); // Ensure immediate output
                 }
             }
@@ -131,9 +132,9 @@ void eventCallback(ConstFSEventStreamRef streamRef,
             // Generic mode: just print the path
             if (eventFlags[i] & (kFSEventStreamEventFlagUserDropped | kFSEventStreamEventFlagKernelDropped)) {
                 // Sadness. Queue overflowed; we just invalidate the whole directory.
-                printf("%s\n", contextData->watch_path);
+                printf("%s%c", contextData->watch_path, contextData->terminator);
             } else {
-                printf("%s\n", paths[i]);
+                printf("%s%c", paths[i], contextData->terminator);
             }
             fflush(stdout); // Ensure immediate output
         }
@@ -146,6 +147,7 @@ void event_watch_loop(const char *watch_path, unsigned int file_events_mask, uns
     contextData.generic_mode = generic_mode;
     contextData.file_events_mask = file_events_mask;
     contextData.dir_events_mask = dir_events_mask;
+    contextData.terminator = terminator;
 
     FSEventStreamContext context = {0, &contextData, NULL, NULL, NULL};
     FSEventStreamRef stream;
