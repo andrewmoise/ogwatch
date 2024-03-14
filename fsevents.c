@@ -52,7 +52,7 @@ unsigned int get_default_file_events_mask() {
 }
 
 unsigned int get_default_dir_events_mask() {
-    return kFSEventStreamEventFlagItemCreated | kFSEventStreamEventFlagItemRemoved | kFSEventStreamEventFlagMount | kFSEventStreamEventFlagUnmount | kFSEventStreamEventFlagItemRenamed;
+    return kFSEventStreamEventFlagItemCreated | kFSEventStreamEventFlagItemRemoved | kFSEventStreamEventFlagMount | kFSEventStreamEventFlagUnmount | kFSEventStreamEventFlagItemRenamed | kFSEventStreamEventFlagMustScanSubDirs;
 }
 
 unsigned int get_generic_file_events_mask() {
