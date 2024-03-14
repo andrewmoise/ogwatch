@@ -40,29 +40,21 @@ unsigned int parse_events(char *events_str) {
 
 // Help message function
 void print_help() {
-    printf("Usage: fanotify_watch [options] <directory>\n");
+    printf("Usage: ogwatch [options] <directory>\n");
     printf("Options:\n");
-    printf("  -f <file_events>   Comma-separated list of events for files\n");
-    printf("  -d <dir_events>    Comma-separated list of events for directories\n");
-    printf("  -0                 Use null character as terminator\n");
-    printf("  -g                 Enable generic output mode\n");
-    printf("  -h                 Display help and exit\n");
-    printf("Events:\n");
+    printf("  -f <file_events>   Comma-separated list of file events to see.\n");
+    printf("  -d <dir_events>    Comma-separated list of directory events to see.\n");
+    printf("  -0                 Use null character as terminator for output lines.\n");
+    printf("  -g                 Enable generic output mode, printing only paths.\n");
+    printf("  -h                 Display this help message and exit.\n");
+    printf("\nEvents:\n");
+    printf("The events you can monitor are specific to the backend in use. On this\n");
+    printf(" platform, they are:\n");
+    printf("\n");
     EventMap *events = get_full_events_list();
     for (int i = 0; events[i].name != NULL; i++) {
         printf("  %s\n", events[i].name);
     }
-    printf("\n");
-    printf("Default events to monitor / typical use: fanotify_watch \\\n");
-    printf("  -d FAN_CREATE,FAN_DELETE,FAN_MOVED_FROM,FAN_MOVED_TO \\\n");
-    printf("  -f FAN_CREATE,FAN_DELETE,FAN_MOVED_FROM,FAN_MOVED_TO,FAN_CLOSE_WRITE\\\n");
-    printf("  /path/to/watch\n");
-    printf("\n");
-    printf("Use FAN_CLOSE_WRITE to debounce multiple writes, and just get a single\n");
-    printf("  notification when a modified file is being closed.\n");
-    printf("\n");
-    printf("Output will come with one event per line, with |FAN_ONDIR for directory\n");
-    printf("  events, or without for file events.\n");
 }
 
 int main(int argc, char *argv[]) {
