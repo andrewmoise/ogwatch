@@ -66,13 +66,11 @@ Or, in generic (`-g`) mode:
 * -0: Use null characters as terminators in the output, instead of newlines.
 * -h: Display help text and exit.
 
-Events applying to files or to directories are selected individually, using the -f and -d options respectively. If no options are specified, it will default to a limited list which will still let you know if files or file contents are changing.
+Events applying to files or to directories are selected individually, using the -f and -d options respectively. If no options are specified, it will default to a sensible list.
 
-In most cases, you can use "-g" with no event filters, and then simply examine for yourself the paths you get to discover what has happened to the filesystem. There's an inherent race conditiong anyway between when the event is created and when you're looking for the file the event corresponds to -- so it is perfectly safe simply to ignore the event type, and rescan for yourself the paths provided and update the state of your application accordingly.
+In most cases, you can use "-g" with no event filters, and then simply examine for yourself the paths you get to discover what has happened. There's an inherent race conditiong anyway between when the event is created and when you're looking for the file the event corresponds to -- so it is perfectly safe simply to ignore the event type, and rescan for yourself the paths provided and update the state of your application accordingly.
 
-Note that if you're doing this, and you receive an existing directory as a path, you must rescan the entire directory recursively to be guaranteed that you'll receive all updates. 
-
-On queue overruns where the kernel may have lost events, we emit the root of the watch directory to request a full rescan, since that's the only way to guarantee up-to-date-ness in that case.
+Note that if you're doing this, and you receive an existing directory as a path, you must rescan the entire directory recursively to be guaranteed that you'll receive all updates. Notably, on queue overruns where the kernel may have lost events, we emit the root of the watch directory to request a full rescan, since that's the only way to guarantee up-to-date-ness in that case.
 
 ### Types of events (fanotify)
 
@@ -121,7 +119,7 @@ Note that the FSEvents backend debounces duplicate events, with a slight delay (
 * ItemIsDir: The event pertains to a directory.
 * ItemIsSymlink: The event pertains to a symbolic link.
 
-(ItemIsFile is filtered from the output event type; the other two are emitted as suffixes to the underlying event type.)
+Events corresponding to directories or symlinks will have ItemIsDir or ItemIsSymlink respectively appended to them, e.g. `ItemCreated|ItemIsDir`. ItemIsFile is however not included in the output in this same way.
 
 ## Installation
 
