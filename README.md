@@ -61,7 +61,6 @@ Or, in generic (`-g`) mode:
 
 * -f: File events to monitor, as a comma-separated list of (backend-specific) event types.
 * -d: Directory events to monitor, as a comma-separated list of (backend-specific) event types.
-
 * -g: Run in "generic" mode -- don't report event types, simply report changed paths.
 * -0: Use null characters as terminators in the output, instead of newlines.
 * -h: Display help text and exit.
